@@ -21,6 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const emptyState = document.getElementById('empty-state');
     const btnExport = document.getElementById('btn-export');
     const themeToggleBtn = document.getElementById('btn-theme-toggle');
+    const searchClearBtn = document.getElementById('search-clear-btn');
+    const btnEmptyReset = document.getElementById('btn-empty-reset');
+    const btnEmptyRetry = document.getElementById('btn-empty-retry');
     
     // Stats Elements
     const statTotal = document.getElementById('stat-total');
@@ -39,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseModal = document.getElementById('btn-close-modal');
     const btnCancelModal = document.getElementById('btn-cancel-modal');
     const hashtagChips = document.getElementById('hashtag-chips');
+    const btnTrimTweet = document.getElementById('btn-trim-tweet');
 
     // Toast Notification Elements
     const toastContainer = document.getElementById('toast-container');
@@ -51,7 +55,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     searchInput.addEventListener('input', (e) => {
         searchQuery = e.target.value.trim().toLowerCase();
+        searchClearBtn.style.display = searchQuery ? 'flex' : 'none';
         renderTimeline();
+    });
+
+    searchClearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        searchQuery = '';
+        searchClearBtn.style.display = 'none';
+        renderTimeline();
+        searchInput.focus();
     });
 
     sortSelect.addEventListener('change', (e) => {
@@ -60,6 +73,56 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnExport.addEventListener('click', exportToCSV);
+
+    btnEmptyReset.addEventListener('click', () => {
+        searchInput.value = '';
+        searchQuery = '';
+        searchClearBtn.style.display = 'none';
+        activeFilter = 'All';
+        
+        filterChipsContainer.querySelectorAll('.chip').forEach(c => {
+            if (c.getAttribute('data-filter') === 'All') {
+                c.classList.add('active');
+            } else {
+                c.classList.remove('active');
+            }
+        });
+        
+        renderTimeline();
+    });
+
+    btnEmptyRetry.addEventListener('click', () => {
+        fetchReleaseNotes(true);
+    });
+
+    btnTrimTweet.addEventListener('click', () => {
+        if (!activeTweetItem) return;
+        const headerText = `BigQuery Release (${activeTweetItem.date}):\n📍 [${activeTweetItem.type}]\n\n`;
+        const footerText = `\n\nRead more: ${activeTweetItem.link}\n#BigQuery #GCP`;
+        const limit = 280;
+        const metaLen = headerText.length + footerText.length;
+        const maxBodyLen = limit - metaLen;
+        
+        let bodyText = activeTweetItem.rawText;
+        if (bodyText.length > maxBodyLen) {
+            bodyText = bodyText.substring(0, maxBodyLen - 3) + '...';
+        }
+        
+        tweetTextarea.value = headerText + bodyText + footerText;
+        
+        // Match hashtag chip selected classes with new text contents
+        hashtagChips.querySelectorAll('.hashtag-chip').forEach(chip => {
+            const tag = chip.textContent;
+            if (tweetTextarea.value.includes(tag)) {
+                chip.classList.add('selected');
+            } else {
+                chip.classList.remove('selected');
+            }
+        });
+
+        updateTweetComposerStatus();
+        showToast('Tweet text trimmed to fit limit!');
+    });
 
     // Theme Switcher Logic
     const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -107,23 +170,39 @@ document.addEventListener('DOMContentLoaded', () => {
         closeTweetModal();
     });
 
-    // Add hashtag click behavior
+    // Add hashtag click behavior (multi-select toggling)
     hashtagChips.addEventListener('click', (e) => {
         if (e.target.classList.contains('hashtag-chip')) {
-            const hashtag = e.target.textContent;
-            const currentVal = tweetTextarea.value;
-            // Append hashtag if not already present
-            if (!currentVal.includes(hashtag)) {
-                tweetTextarea.value = currentVal.trim() + ' ' + hashtag;
-                updateTweetComposerStatus();
+            const chip = e.target;
+            const hashtag = chip.textContent;
+            let currentVal = tweetTextarea.value;
+            
+            if (chip.classList.contains('selected')) {
+                chip.classList.remove('selected');
+                // Remove hashtag from composer text (handling whitespace padding)
+                const regex = new RegExp('\\s*' + escapeRegExp(hashtag), 'g');
+                tweetTextarea.value = currentVal.replace(regex, '').trim();
+            } else {
+                chip.classList.add('selected');
+                if (!currentVal.includes(hashtag)) {
+                    tweetTextarea.value = currentVal.trim() + ' ' + hashtag;
+                }
             }
+            updateTweetComposerStatus();
         }
     });
 
-    // Close Modal with Escape key
+    // Close Modal with Escape key & Search shortcut '/'
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && tweetModal.classList.contains('active')) {
             closeTweetModal();
+        }
+        
+        // Focus search when '/' is pressed (excluding input fields and active modal)
+        if (e.key === '/' && document.activeElement !== searchInput && !tweetModal.classList.contains('active')) {
+            e.preventDefault();
+            searchInput.focus();
+            searchInput.select();
         }
     });
 
@@ -263,8 +342,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 skeletonLoader.style.display = 'none';
                 emptyState.style.display = 'block';
-                emptyState.querySelector('.empty-title').textContent = 'Oops, something went wrong';
-                emptyState.querySelector('.empty-description').textContent = err.message || 'Unable to connect to the Flask server.';
+                
+                // Show retry connection, hide reset filters
+                btnEmptyReset.style.display = 'none';
+                btnEmptyRetry.style.display = 'inline-flex';
+                
+                document.getElementById('empty-icon').textContent = '⚠️';
+                document.getElementById('empty-title').textContent = 'Connection Failed';
+                document.getElementById('empty-description').textContent = err.message || 'Unable to connect to the Flask server. Please check your network and try again.';
             })
             .finally(() => {
                 refreshBtn.classList.remove('loading');
@@ -379,12 +464,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filteredItems.length === 0) {
             timelineContainer.style.display = 'none';
             emptyState.style.display = 'block';
-            emptyState.querySelector('.empty-title').textContent = 'No matching updates found';
-            emptyState.querySelector('.empty-description').textContent = 'Try resetting filters or searching for something else.';
+            
+            // Show Reset Filters button if search/category filters are active
+            btnEmptyReset.style.display = (searchQuery || activeFilter !== 'All') ? 'inline-flex' : 'none';
+            btnEmptyRetry.style.display = 'none';
+            
+            document.getElementById('empty-icon').textContent = '📂';
+            document.getElementById('empty-title').textContent = 'No matching updates found';
+            document.getElementById('empty-description').textContent = 'Try resetting filters or searching for something else.';
             return;
         }
 
         emptyState.style.display = 'none';
+        btnEmptyReset.style.display = 'none';
+        btnEmptyRetry.style.display = 'none';
         timelineContainer.style.display = 'block';
 
         // Group items by date to build the timeline view
@@ -539,6 +632,17 @@ document.addEventListener('DOMContentLoaded', () => {
         
         tweetTextarea.value = fullTweetText;
         tweetModal.classList.add('active');
+        
+        // Synchronize selected state of hashtag chips based on text contents
+        hashtagChips.querySelectorAll('.hashtag-chip').forEach(chip => {
+            const tag = chip.textContent;
+            if (fullTweetText.includes(tag)) {
+                chip.classList.add('selected');
+            } else {
+                chip.classList.remove('selected');
+            }
+        });
+
         updateTweetComposerStatus();
         tweetTextarea.focus();
     }
@@ -565,11 +669,12 @@ document.addEventListener('DOMContentLoaded', () => {
             charCountText.classList.add('danger');
             charCircle.className = 'char-circle danger';
             btnPostTweet.disabled = true;
-            // set stroke offset to 0 (full color indicator of overflow)
+            btnTrimTweet.style.display = 'inline-flex'; // Show Trim to Fit button
             progressCircle.style.strokeDashoffset = 0;
         } else {
             charCountText.classList.remove('danger');
             btnPostTweet.disabled = false;
+            btnTrimTweet.style.display = 'none'; // Hide Trim to Fit button
             
             const percentage = count / limit;
             const offset = circumference - (percentage * circumference);

@@ -1328,3 +1328,89 @@ body.light-theme .btn-theme-toggle:hover {
     background: rgba(226, 232, 240, 1);
     color: #0f172a;
 }
+
+/* --- UX Improvements --- */
+
+/* 1. Search Clear Button */
+.search-clear-btn {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    transition: var(--transition-smooth);
+    padding: 0;
+}
+
+.search-clear-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+body.light-theme .search-clear-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* Adjust search input padding when clear button is visible */
+.search-input {
+    padding-right: 2.5rem;
+}
+
+/* 2. Table Overflow Guard inside card contents */
+.card-content {
+    overflow-x: auto;
+}
+.card-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+}
+.card-content th, .card-content td {
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+    text-align: left;
+}
+.card-content th {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+/* 3. Selected Hashtag Chip Style */
+.hashtag-chip.selected {
+    background: var(--twitter-blue) !important;
+    color: white !important;
+    border-color: var(--twitter-blue) !important;
+}
+
+/* 4. Mobile Header Condensation */
+@media (max-width: 576px) {
+    .btn-refresh .btn-text-label,
+    .btn-export .btn-text-label {
+        display: none;
+    }
+    .btn-refresh {
+        padding: 0.65rem 0.85rem;
+    }
+    .btn-export {
+        padding: 0.75rem 0.85rem;
+    }
+    .btn-refresh svg,
+    .btn-export svg {
+        margin-right: 0 !important;
+    }
+    
+    .status-indicator {
+        font-size: 0.75rem;
+        padding: 0.4rem 0.75rem;
+    }
+}
