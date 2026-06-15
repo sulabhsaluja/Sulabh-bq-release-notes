@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const timelineContainer = document.getElementById('timeline-container');
     const skeletonLoader = document.getElementById('skeleton-loader');
     const emptyState = document.getElementById('empty-state');
+    const btnExport = document.getElementById('btn-export');
+    const themeToggleBtn = document.getElementById('btn-theme-toggle');
     
     // Stats Elements
     const statTotal = document.getElementById('stat-total');
@@ -55,6 +57,28 @@ document.addEventListener('DOMContentLoaded', () => {
     sortSelect.addEventListener('change', (e) => {
         sortOrder = e.target.value;
         renderTimeline();
+    });
+
+    btnExport.addEventListener('click', exportToCSV);
+
+    // Theme Switcher Logic
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    if (savedTheme === 'light') {
+        document.body.classList.add('light-theme');
+        themeToggleBtn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+        const isLight = document.body.classList.toggle('light-theme');
+        localStorage.setItem('theme', isLight ? 'light' : 'dark');
+        
+        if (isLight) {
+            themeToggleBtn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`;
+            showToast('Switched to Light theme');
+        } else {
+            themeToggleBtn.innerHTML = `<svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 9H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>`;
+            showToast('Switched to Dark theme');
+        }
     });
 
     // Close Modal on click outside content
@@ -588,5 +612,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 toast.remove();
             }, 300);
         }, 3000);
+    }
+
+    // Export currently filtered & sorted release notes to CSV
+    function exportToCSV() {
+        const filteredItems = getFilteredAndSortedItems();
+        if (filteredItems.length === 0) {
+            showToast('No items to export', 'error');
+            return;
+        }
+
+        // CSV Headers
+        const headers = ['Date', 'Type', 'Description', 'Link'];
+        
+        // Convert items to CSV rows
+        const rows = filteredItems.map(item => {
+            // Escape double quotes and remove newlines for clean CSV lines
+            const cleanText = item.rawText
+                .replace(/"/g, '""')
+                .replace(/\r?\n|\r/g, ' ');
+                
+            return [
+                `"${item.date}"`,
+                `"${item.type}"`,
+                `"${cleanText}"`,
+                `"${item.link}"`
+            ].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        
+        // Create a blob and download it
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `bigquery_release_notes_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('Exported CSV successfully!');
     }
 });
